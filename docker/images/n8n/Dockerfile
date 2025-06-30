@@ -13,7 +13,8 @@ FROM n8nio/base:${NODE_VERSION} AS system-deps
 # ==============================================================================
 FROM alpine:3.22.0 AS app-artifact-processor
 
-COPY ./compiled /app/
+COPY . .
+RUN pnpm install && pnpm build && cp -r ./compiled /app
 
 # ==============================================================================
 # STAGE 3: Task Runner Launcher
