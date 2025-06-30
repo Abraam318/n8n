@@ -1,24 +1,32 @@
-ARG NODE_VERSION=22
+ARG NODE_VERSION=18
 ARG N8N_VERSION=snapshot
 ARG LAUNCHER_VERSION=1.1.3
 ARG TARGETPLATFORM
 
-# ==============================================================================
-# STAGE 1: System Dependencies & Base Setup
-# ==============================================================================
+# =======================
+# STAGE 1: Base Setup
+# =======================
 FROM n8nio/base:${NODE_VERSION} AS system-deps
 
-# ==============================================================================
-# STAGE 2: Application Artifact Processor
-# ==============================================================================
-FROM alpine:3.22.0 AS app-artifact-processor
+# =======================
+# STAGE 2: Build n8n App
+# =======================
+FROM node:${NODE_VERSION}-bullseye AS app-artifact-processor
+
+WORKDIR /build
+
+RUN apt-get update && apt-get install -y python3 make g++ git
 
 COPY . .
-RUN pnpm install && pnpm build && cp -r ./compiled /app
 
-# ==============================================================================
-# STAGE 3: Task Runner Launcher
-# ==============================================================================
+RUN npm install -g pnpm && \
+    pnpm install --frozen-lockfile && \
+    pnpm build && \
+    cp -r ./compiled /app
+
+# =======================
+# STAGE 3: Launcher
+# =======================
 FROM alpine:3.22.0 AS launcher-downloader
 ARG TARGETPLATFORM
 ARG LAUNCHER_VERSION
@@ -38,9 +46,9 @@ RUN set -e; \
     tar xzf task-runner-launcher-${LAUNCHER_VERSION}-linux-${ARCH_NAME}.tar.gz -C /launcher-bin; \
     cd / && rm -rf /launcher-temp
 
-# ==============================================================================
-# STAGE 4: Final Runtime Image
-# ==============================================================================
+# =======================
+# STAGE 4: Final Runtime
+# =======================
 FROM system-deps AS runtime
 
 ARG N8N_VERSION
@@ -58,21 +66,14 @@ COPY docker/images/n8n/docker-entrypoint.sh /
 COPY docker/images/n8n/n8n-task-runners.json /etc/n8n-task-runners.json
 
 RUN cd /usr/local/lib/node_modules/n8n && \
-		npm rebuild sqlite3 && \
-		ln -s /usr/local/lib/node_modules/n8n/bin/n8n /usr/local/bin/n8n && \
+    npm rebuild sqlite3 && \
+    ln -s /usr/local/lib/node_modules/n8n/bin/n8n /usr/local/bin/n8n && \
     mkdir -p /home/node/.n8n && \
     chown -R node:node /home/node
 
-# Install npm@11.4.2 to fix brace-expansion vulnerability, remove after vulnerability is fixed in node image
 RUN npm install -g npm@11.4.2
 RUN cd /usr/local/lib/node_modules/n8n/node_modules/pdfjs-dist && npm install @napi-rs/canvas
 
 EXPOSE 5678/tcp
 USER node
 ENTRYPOINT ["tini", "--", "/docker-entrypoint.sh"]
-
-LABEL org.opencontainers.image.title="n8n" \
-      org.opencontainers.image.description="Workflow Automation Tool" \
-      org.opencontainers.image.source="https://github.com/n8n-io/n8n" \
-      org.opencontainers.image.url="https://n8n.io" \
-      org.opencontainers.image.version=${N8N_VERSION}
