@@ -1,3 +1,4 @@
+
 ARG NODE_VERSION=18
 ARG N8N_VERSION=snapshot
 ARG LAUNCHER_VERSION=1.1.3
@@ -20,9 +21,11 @@ RUN apt-get update && apt-get install -y python3 make g++ git
 COPY . .
 
 RUN npm install -g pnpm && \
-    pnpm install --frozen-lockfile && \
-    pnpm build && \
-    cp -r ./compiled /app
+    pnpm install --frozen-lockfile
+RUN pnpm build && \
+    ls -l /build && \
+    ls -l /build/compiled  # Debug step to ensure 'compiled' directory exists
+RUN cp -r /build/compiled /app
 
 # =======================
 # STAGE 3: Launcher
